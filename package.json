@@ -1,0 +1,48 @@
+{
+  "name": "tile-mortar",
+  "version": "0.0.1",
+  "description": "Merge sets of tiles",
+  "bin": {
+    "mortar": "./cli.js"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "@mapbox/mbtiles": "^0.9.0",
+    "async": "^2.3.0",
+    "mapnik": "^3.6.0",
+    "minimist": "^1.2.0",
+    "q": "^1.5.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trailbehind/Mortar.git"
+  },
+  "keywords": [
+    "tilelive",
+    "cdn",
+    "varnish",
+    "purge"
+  ],
+  "_npmUser": {
+    "name": "jessecrocker",
+    "email": "jesse@gaiagps.com"
+  },
+  "author": "Jesse Crocker",
+  "maintainers": [
+    {
+      "name": "Jesse Crocker",
+      "email": "jesse@gaiagps.com"
+    }
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/trailbehind/Mortar/issues"
+  },
+  "homepage": "https://github.com/trailbehind/Mortar#readme"
+}
