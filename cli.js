@@ -69,39 +69,41 @@ async.each(inputs, function(path, callback) {
 
 function merge(output, inputs) {
     console.log("Starting merge");
-    async.waterfall([function(callback){
-        console.log("startWriting");
-        output.startWriting(function(err){
-            if(err) return callback(err);
-            callback(null);
-        });
-    },
-    function(callback) {
-        console.log("copying info");
-        inputs[0].getInfo(function(err, info){
-            if(err) return callback(err);
-            output.putInfo(info, function(err){
+    async.waterfall([
+        function(callback) {
+            console.log("copying info");
+            inputs[0].getInfo(function(err, info){
+                if(err) return callback(err);
+                output.startWriting(function(err){
+                    if(err) return callback(err);
+                    output.putInfo(info, function(err){
+                        if(err) return callback(err);
+                        output.stopWriting(function(err){
+                            callback(err);
+                        });
+                    });
+                });
+            });
+        },
+        function(callback){
+            console.log("merging inputs");
+            async.eachOfLimit(inputs, 1, function(input, index, eachCallback){
+                console.log("merge input " + (index + 1) + "/" + inputs.length);
+                output.startWriting(function(err){
+                    if(err) return eachCallback(err);
+                    mergeInput(output, input, inputs, function(err){
+                        if(err) return eachCallback(err);
+                        output.stopWriting(function(err){
+                            eachCallback(err);
+                        })
+                    });
+                });
+            }, function(err) {
+                if(err) console.log("error merging input", err);
                 callback(err);
             });
-        });
-    },
-    function(callback){
-        console.log("merging inputs");
-        async.eachOfLimit(inputs, 1, function(input, index, eachCallback){
-            console.log("merge input " + (index + 1) + "/" + inputs.length);
-            mergeInput(output, input, inputs, eachCallback);
-        }, function(err) {
-            if(err) console.log("error merging input", err);
-            callback(err);
-        });
-    },
-    function(callback){
-        console.log("stopWriting");
-        output.stopWriting(function(err) {
-            if (err) return callback(err);
-            console.log("Finished");
-        });
-    }], function(err){
+        },
+    ], function(err){
         console.log("done");
         if(err){
             console.log(err);
