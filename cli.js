@@ -12,14 +12,18 @@ var mbtiles = require('@mapbox/mbtiles');
 var async = require('async');
 var mapnik = require("mapnik");
 var Q = require("Q");
+var zlib = require("zlib");
 
 mbtiles.prototype.tileExists = function(z, x, y, callback) {
     y = (1 << z) - 1 - y;
 
     var sql = 'SELECT count(1) as count FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?';
     var mbtiles = this;
-    this._db.get(sql, z, x, y, function(err, row) {
-        callback(null, row.count != 0);
+    var params = [z, x, y];
+    this._db.get(sql, params, function(err, row) {
+        // console.log(err, row);
+        var exists = row.count != 0;
+        callback(err, exists);
     });
 };
 
@@ -108,75 +112,86 @@ function merge(output, inputs) {
 
 function mergeInput(output, input, inputs, callback) {
     //Iterate tiles in input
-    var promises = [];
-    input._db.each("SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles", function(err, row) {
-        var promise = Q.defer();
-        promises.push(promise.promise);
-
-        if(err) return promise.reject(err);
-        var x = row.x;
-        var z = row.z;
-        var y = flipY(row.y, z);
-
-        //check if tile exists in output
-        output.tileExists(z, x, y, function(err, existing) {
-            if(existing) { 
-                console.log("Tile exists, skipping");
-                promise.resolve();
-            } else { //tile does not yet exist in output, so merge it
-                mergeTile(output, inputs, x, y, z, function(err) {
-                    if(err) {
-                        promise.reject(err);
-                    } else {
-                        promise.resolve();
-                    }
-                });
-            }
-        });
-    }, function(err, rows){
+    var maxzoom = 3;
+    var sql = "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
+    var params = [];
+    if(maxzoom) {
+        sql += " WHERE zoom_level < ?";
+        params.push(maxzoom);
+    }
+    input._db.all(sql, params, function(err, rows) {
+        console.log("Processing " + rows.length + " rows from input");
         if(err) return callback(err);
-        console.log("Input completed with " + rows + " rows. " + promises.length + " promises.");
-        Q.allSettled(promises).then(function(results) {
-            callback(null);
-        }, function(err) {
+        async.each(rows, function(row, eachCallback){
+            var x = row.x;
+            var z = row.z;
+            var y = flipY(row.y, z);
+
+            //check if tile exists in output
+            output.tileExists(z, x, y, function(err, existing) {
+                if(existing) { 
+                    console.log("Tile exists, skipping");
+                    eachCallback();
+                } else { //tile does not yet exist in output, so merge it
+                    mergeTile(output, inputs, x, y, z, function(err) {
+                        eachCallback(err);
+                    });
+                }
+            });
+        }, function(err){
+            if(err) {
+                console.log("Error iterating tiles: ", err);
+            }
             callback(err);
         });
     });
 }
 
 function mergeTile(output, inputs, x, y, z, callback) {
-//    console.log("mergeing tile " + z + "/" + x + "/" + y);
-
     //Fetch tile from each input
     var promises = [];
     inputs.forEach(function(input){
         var deferred = Q.defer();
-        promises.push(deferred);
+        promises.push(deferred.promise);
         input.getTile(z, x, y, function(err, data) {
-            return deferred.reject(err);
-            var inputTile = new mapnik.VectorTile(z, x, y);
-            inputTile.setData(data);
-            deferred.resolve(inputTile);
+            if(data) {
+                try {
+                    var inputTile = new mapnik.VectorTile(z, x, y);
+                    inputTile.setData(data);
+                    deferred.resolve(inputTile);
+                } catch (err) {
+                    deferred.reject(err);
+                }
+            } else {
+                deferred.resolve(null);
+            }
         });
     });
 
     //Merge all the input tiles
     Q.all(promises).then(function(tiles) {
-        console.log("Merging " + tiles.length + " tiles to " + z + "/" + x + "/" + y);
         var outputTile = new mapnik.VectorTile(z, x, y);
-        try {
-            outputTile.composite(tiles);
-        } catch (err) {
-            callback(err);
+        var tilesWithData = [];
+        for(var i  = 0; i < tiles.length; i++) {
+            if(tiles[i]) {
+                tilesWithData.push(tiles[i]);
+            }
         }
-
+        console.log("Merging " + tilesWithData.length + " tiles to " + z + "/" + x + "/" + y);
+        try {
+            outputTile.composite(tilesWithData);
+        } catch (err) {
+            console.log(err);
+            return callback(err);
+        }
         //write to output
         zlib.gzip(outputTile.getData(), function(err, data) {
-            output.write(z, x, y, data, function(err) {
+            output.putTile(z, x, y, data, function(err) {
                 callback(err);
             });
         });
     }, function(err) {
+        if(err) console.log(err);
         callback(err);
     });
 }
