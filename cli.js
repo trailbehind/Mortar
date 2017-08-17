@@ -6,7 +6,8 @@ function usage() {
 
 var argv = require('minimist')(process.argv.slice(2),{
     output: 'string',
-    verbose: 'boolean'
+    verbose: 'boolean',
+    maxzoom: 'integer'
 });
 var fs = require('fs');
 var mbtiles = require('@mapbox/mbtiles');
@@ -33,6 +34,7 @@ mbtiles.prototype.tileExists = function(z, x, y, callback) {
 
 var outputPath = argv.output;
 var verbose = argv.verbose;
+var maxzoom = argv.maxzoom || 22;
 var inputs = argv._;
 
 if(!outputPath || !inputs || !inputs.length || inputs.length < 2) {
@@ -67,12 +69,12 @@ async.each(inputs, function(path, callback) {
     if(err) throw err;
     new mbtiles(outputPath, function(err, tiles) {
         if(err) throw err;
-        merge(tiles, inputTiles, verbose);
+        merge(tiles, inputTiles, verbose, maxzoom);
     });
 });
 
 
-function merge(output, inputs, verbose) {
+function merge(output, inputs, verbose, maxzoom) {
     console.log("Starting merge");
     async.waterfall([
         function(callback) {
@@ -96,7 +98,7 @@ function merge(output, inputs, verbose) {
                 console.log("merge input " + (index + 1) + "/" + inputs.length);
                 output.startWriting(function(err){
                     if(err) return eachCallback(err);
-                    mergeInput(output, input, inputs, verbose, function(err){
+                    mergeInput(output, input, inputs, verbose, maxzoom, function(err){
                         if(err) return eachCallback(err);
                         console.log("Merging " + (index + 1) + "/" + inputs.length + " finished, calling stopWriting");
                         output.stopWriting(function(err){
@@ -118,13 +120,12 @@ function merge(output, inputs, verbose) {
     });
 }
 
-function mergeInput(output, input, inputs, verbose, callback) {
+function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
     //Iterate tiles in input
-    var maxzoom = null;
     var sql = "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
     var params = [];
     if(maxzoom) {
-        sql += " WHERE zoom_level < ?";
+        sql += " WHERE zoom_level <= ?";
         params.push(maxzoom);
     }
     input._db.all(sql, params, function(err, rows) {
