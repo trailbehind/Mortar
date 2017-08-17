@@ -10,13 +10,14 @@ var argv = require("minimist")(process.argv.slice(2), {
   maxzoom: "integer",
   concurrency: "integer"
 });
-var fs = require("fs");
-var mbtiles = require("@mapbox/mbtiles");
 var async = require("async");
+var fs = require("fs");
+var geojsonMerge = require("@mapbox/geojson-merge");
 var mapnik = require("mapnik");
+var mbtiles = require("@mapbox/mbtiles");
+var ProgressBar = require("progress");
 var Q = require("Q");
 var zlib = require("zlib");
-var ProgressBar = require("progress");
 
 mapnik.register_default_input_plugins();
 
@@ -416,15 +417,7 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
 function mergeTileLayers(layerName, a, b, callback) {
   var aData = JSON.parse(a.toGeoJSONSync(layerName));
   var bData = JSON.parse(b.toGeoJSONSync(layerName));
-  var mergedData = {
-    type: "FeatureCollection",
-    features: []
-  };
-  [aData, bData].forEach(function(fc) {
-    for (var j = 0; j < fc.features.length; j++) {
-      mergedData.features.push(fc.features[j]);
-    }
-  });
+  var mergedData = geojsonMerge.merge([aData, bData]);
   var newTile = new mapnik.VectorTile(a.z, a.x, a.y);
   newTile.tileSize = a.tileSize;
   newTile.bufferSize = a.bufferSize;

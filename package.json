@@ -14,7 +14,8 @@
     "mapnik": "^3.6.0",
     "minimist": "^1.2.0",
     "q": "^1.5.0",
-    "progress": "^2.0.0"
+    "progress": "^2.0.0",
+    "@mapbox/geojson-merge": "^1.0.2"
   },
   "devDependencies": {},
   "scripts": {
