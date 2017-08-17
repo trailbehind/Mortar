@@ -34,7 +34,10 @@ mbtiles.prototype.tileExists = function(z, x, y, callback) {
 
 var outputPath = argv.output;
 var verbose = argv.verbose;
-var maxzoom = argv.maxzoom || 22;
+var maxzoom = argv.maxzoom;
+if(maxzoom === undefined) {
+    maxzoom = 24;
+}
 var inputs = argv._;
 
 if(!outputPath || !inputs || !inputs.length || inputs.length < 2) {
@@ -208,7 +211,7 @@ function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
     //Iterate tiles in input
     var sql = "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
     var params = [];
-    if(maxzoom) {
+    if(maxzoom !== undefined) {
         sql += " WHERE zoom_level <= ?";
         params.push(maxzoom);
     }
