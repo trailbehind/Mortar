@@ -306,7 +306,7 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
                 async.eachLimit(tile.names(), 1, function(layerName, layerCallback){
                     if(layers[layerName]) {
                         try {
-                            mergeTileLayers(layerName, layers[layerName], tile.layer(layerName), function(err, mergedLayer){
+                            mergeTileLayers(layerName, layers[layerName], tile, function(err, mergedLayer){
                                 layers[layerName] = mergedLayer;
                                 layerCallback(err);
                             });
