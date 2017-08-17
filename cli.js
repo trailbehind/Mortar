@@ -5,7 +5,8 @@ function usage() {
 }
 
 var argv = require('minimist')(process.argv.slice(2),{
-    output: 'string'
+    output: 'string',
+    verbose: 'boolean'
 });
 var fs = require('fs');
 var mbtiles = require('@mapbox/mbtiles');
@@ -13,6 +14,7 @@ var async = require('async');
 var mapnik = require("mapnik");
 var Q = require("Q");
 var zlib = require("zlib");
+var ProgressBar = require('progress');
 
 var CONCURRENT_TILES = 2;
 
@@ -30,6 +32,7 @@ mbtiles.prototype.tileExists = function(z, x, y, callback) {
 };
 
 var outputPath = argv.output;
+var verbose = argv.verbose;
 var inputs = argv._;
 
 if(!outputPath || !inputs || !inputs.length || inputs.length < 2) {
@@ -64,12 +67,12 @@ async.each(inputs, function(path, callback) {
     if(err) throw err;
     new mbtiles(outputPath, function(err, tiles) {
         if(err) throw err;
-        merge(tiles, inputTiles);
+        merge(tiles, inputTiles, verbose);
     });
 });
 
 
-function merge(output, inputs) {
+function merge(output, inputs, verbose) {
     console.log("Starting merge");
     async.waterfall([
         function(callback) {
@@ -93,7 +96,7 @@ function merge(output, inputs) {
                 console.log("merge input " + (index + 1) + "/" + inputs.length);
                 output.startWriting(function(err){
                     if(err) return eachCallback(err);
-                    mergeInput(output, input, inputs, function(err){
+                    mergeInput(output, input, inputs, verbose, function(err){
                         if(err) return eachCallback(err);
                         console.log("Merging " + (index + 1) + "/" + inputs.length + " finished, calling stopWriting");
                         output.stopWriting(function(err){
@@ -115,7 +118,7 @@ function merge(output, inputs) {
     });
 }
 
-function mergeInput(output, input, inputs, callback) {
+function mergeInput(output, input, inputs, verbose, callback) {
     //Iterate tiles in input
     var maxzoom = null;
     var sql = "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
@@ -126,6 +129,11 @@ function mergeInput(output, input, inputs, callback) {
     }
     input._db.all(sql, params, function(err, rows) {
         console.log("Processing " + rows.length + " rows from input");
+        var bar;
+        if(!verbose) {
+         bar = new ProgressBar(':bar', { total: rows.length });
+        }
+
         if(err) return callback(err);
         async.eachOfLimit(rows, CONCURRENT_TILES, function(row, index, eachCallback){
             var x = row.x;
@@ -135,10 +143,16 @@ function mergeInput(output, input, inputs, callback) {
             //check if tile exists in output
             output.tileExists(z, x, y, function(err, existing) {
                 if(existing) { 
-                    console.log("Tile exists, skipping");
+                    // console.log("Tile exists, skipping");
+                    if(bar) {
+                        bar.tick();
+                    }
                     eachCallback();
                 } else { //tile does not yet exist in output, so merge it
-                    mergeTile(output, inputs, x, y, z, function(err) {
+                    mergeTile(output, inputs, x, y, z, verbose, function(err) {
+                        if(bar) {
+                            bar.tick();
+                        }
                         eachCallback(err);
                     });
                 }
@@ -152,7 +166,7 @@ function mergeInput(output, input, inputs, callback) {
     });
 }
 
-function mergeTile(output, inputs, x, y, z, callback) {
+function mergeTile(output, inputs, x, y, z, verbose, callback) {
     //Fetch tile from each input
     var promises = [];
     inputs.forEach(function(input){
@@ -184,11 +198,15 @@ function mergeTile(output, inputs, x, y, z, callback) {
 
         var outputTile = null;
         if(tilesWithData.length == 1) {
-            console.log("Using existing tile for " + z + "/" + x + "/" + y);
+            if(verbose) {
+                console.log("Using existing tile for " + z + "/" + x + "/" + y);
+            }
             outputTile = tilesWithData[0];
         } else { // > 1
             outputTile = new mapnik.VectorTile(z, x, y);
-            console.log("Merging " + tilesWithData.length + " tiles to " + z + "/" + x + "/" + y);
+            if(verbose) {
+                console.log("Merging " + tilesWithData.length + " tiles to " + z + "/" + x + "/" + y);
+            }
             try {
                 outputTile.compositeSync(tilesWithData);
             } catch (err) {

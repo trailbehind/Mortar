@@ -13,7 +13,8 @@
     "async": "^2.3.0",
     "mapnik": "^3.6.0",
     "minimist": "^1.2.0",
-    "q": "^1.5.0"
+    "q": "^1.5.0",
+    "progress": "^2.0.0"
   },
   "devDependencies": {},
   "scripts": {
