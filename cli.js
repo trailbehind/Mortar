@@ -221,7 +221,7 @@ function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
         console.log("Processing " + rows.length + " rows from input");
         var bar;
         if(!verbose) {
-         bar = new ProgressBar(':bar', { total: rows.length });
+         bar = new ProgressBar(':elapseds :percent :bar :current/:total', { total: rows.length });
         }
 
         if(err) return callback(err);
