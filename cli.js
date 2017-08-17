@@ -7,7 +7,8 @@ function usage() {
 var argv = require('minimist')(process.argv.slice(2),{
     output: 'string',
     verbose: 'boolean',
-    maxzoom: 'integer'
+    maxzoom: 'integer',
+    concurrency: 'integer'
 });
 var fs = require('fs');
 var mbtiles = require('@mapbox/mbtiles');
@@ -19,7 +20,6 @@ var ProgressBar = require('progress');
 
 mapnik.register_default_input_plugins();
 
-var CONCURRENT_TILES = 2;
 
 mbtiles.prototype.tileExists = function(z, x, y, callback) {
     y = (1 << z) - 1 - y;
@@ -37,6 +37,8 @@ mbtiles.prototype.tileExists = function(z, x, y, callback) {
 var outputPath = argv.output;
 var verbose = argv.verbose;
 var maxzoom = argv.maxzoom;
+var CONCURRENT_TILES = argv.concurrency || 2;
+
 if(maxzoom === undefined) {
     maxzoom = 24;
 }
