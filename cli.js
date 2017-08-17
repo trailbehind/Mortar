@@ -78,16 +78,34 @@ function merge(output, inputs, verbose, maxzoom) {
     console.log("Starting merge");
     async.waterfall([
         function(callback) {
-            console.log("copying info");
-            inputs[0].getInfo(function(err, info){
+            console.log("Loading infos");
+            async.each(inputs, function(input, eachCallback){
+                input.getInfo(function(err, info){
+                    if(err) return eachCallback(err);
+                    input.info = info;
+                    eachCallback(null);
+                });
+            }, function(err){
+                callback(err);
+            });
+        },
+        function(callback) {
+            console.log("Merging infos");
+            var info = inputs.map(function(input){
+                return input.info;
+            }).reduce(function(a, b, i){
+                return mergeInfo(a, b, i);
+            });
+            callback(null, info);
+        },
+        function(info, callback) {
+            console.log("writing info");
+            output.startWriting(function(err){
                 if(err) return callback(err);
-                output.startWriting(function(err){
+                output.putInfo(info, function(err){
                     if(err) return callback(err);
-                    output.putInfo(info, function(err){
-                        if(err) return callback(err);
-                        output.stopWriting(function(err){
-                            callback(err);
-                        });
+                    output.stopWriting(function(err){
+                        callback(err);
                     });
                 });
             });
@@ -118,6 +136,72 @@ function merge(output, inputs, verbose, maxzoom) {
             throw err;
         }
     });
+}
+
+function mergeInfo(a, b) {
+    var info = {};
+    if(a.attribution || b.attribution) {
+        if (a.attribution === b.attribution) {
+            info.attribution = a.attribution;
+        } else {
+            info.attribution = [a.attribution, b.attribution].join(", ");
+        }
+    }
+
+    if (a.description === b.description) {
+        info.description = a.description;
+    } else {
+        info.description = [a.description, b.description].join(", ");
+    }
+
+    info.bounds = [
+        Math.min(a.bounds[0], b.bounds[0]),
+        Math.min(a.bounds[1], b.bounds[1]),
+        Math.max(a.bounds[2], b.bounds[2]),
+        Math.max(a.bounds[3], b.bounds[3])
+    ];
+
+    info.maxzoom = Math.max(a.maxzoom, b.maxzoom);
+    info.minzoom = Math.min(a.minzoom, b.minzoom);  
+    info.center = [(info.bounds[0] + info.bounds[2])/2, (info.bounds[1] + info.bounds[3]), Math.round((info.maxzoom + info.minzoom)/2)];
+    info.format = a.format;
+    info.version = a.version;
+    info.name = [a.name, b.name].join(" + ");
+    
+    var vectorLayers = {};
+    [a, b].forEach(function(source){
+        if(source.vector_layers) {
+            source.vector_layers.forEach(function(l){
+                if(vectorLayers[l.id]) {
+                    vectorLayers[l.id] = mergeLayerDefinition(vectorLayers[l.id], l);
+                } else {
+                    vectorLayers[l.id] = l;
+                }
+            });
+        }
+    });
+
+    info.vector_layers = Object.keys(vectorLayers).map(function(k){return vectorLayers[k]});
+    info.id = [a.id, b.id].join(",");
+
+    return info;
+}
+
+function mergeLayerDefinition(a, b) {
+    var layer = {
+        id: a.id,
+    };
+    layer.minzoom = Math.min(a.minzoom, b.minzoom);
+    layer.maxzoom = Math.max(a.maxzoom, b.maxzoom);
+    if (a.description === b.description) {
+        layer.description = a.description;
+    } else {
+        layer.description = [a.description, b.description].join(", ");
+    }
+
+    layer.fields = Object.assign({}, a.fields, b.fields);
+
+    return layer;
 }
 
 function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
