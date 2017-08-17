@@ -17,6 +17,8 @@ var Q = require("Q");
 var zlib = require("zlib");
 var ProgressBar = require('progress');
 
+mapnik.register_default_input_plugins();
+
 var CONCURRENT_TILES = 2;
 
 mbtiles.prototype.tileExists = function(z, x, y, callback) {
@@ -264,7 +266,7 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
             if(data) {
                 try {
                     var inputTile = new mapnik.VectorTile(z, x, y);
-                    inputTile.setData(data);
+                    inputTile.setDataSync(data);
                     deferred.resolve(inputTile);
                 } catch (err) {
                     deferred.reject(err);
@@ -284,35 +286,78 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
             }
         }
 
-        var outputTile = null;
         if(tilesWithData.length == 1) {
             if(verbose) {
                 console.log("Using existing tile for " + z + "/" + x + "/" + y);
             }
-            outputTile = tilesWithData[0];
+            var data = tilesWithData[0].getData({
+                compression: 'gzip',
+                level: 9
+            });
+            output.putTile(z, x, y, data, function(err){
+                callback(err);
+            });
         } else { // > 1
-            outputTile = new mapnik.VectorTile(z, x, y);
             if(verbose) {
                 console.log("Merging " + tilesWithData.length + " tiles to " + z + "/" + x + "/" + y);
             }
-            try {
-                outputTile.compositeSync(tilesWithData);
-            } catch (err) {
-                console.log(err);
-                return callback(err);
-            }
-        }
-
-        //write to output
-        zlib.gzip(outputTile.getData(), function(err, data) {
-            output.putTile(z, x, y, data, function(err) {
-                callback(err);
+            var layers = {};
+            async.eachLimit(tilesWithData, 1, function(tile, tileCallback){
+                async.eachLimit(tile.names(), 1, function(layerName, layerCallback){
+                    if(layers[layerName]) {
+                        try {
+                            mergeTileLayers(layerName, layers[layerName], tile.layer(layerName), function(err, mergedLayer){
+                                layers[layerName] = mergedLayer;
+                                layerCallback(err);
+                            });
+                        } catch (err) {
+                            layerCallback(err);
+                        }
+                    } else {
+                        layers[layerName] = tile.layer(layerName);
+                        layerCallback();
+                    }
+                }, function(err){
+                    tileCallback(err);
+                });
+            }, function(err){
+                if(err) return callback(err);
+                //write to output
+                var layersList = Object.keys(layers).map(function(k){return layers[k]});
+                var outputTile = new mapnik.VectorTile(z, x, y);
+                outputTile.compositeSync(layersList);
+                var data = outputTile.getData({
+                    compression: 'gzip',
+                    level: 9
+                });
+                output.putTile(z, x, y, data, function(err){
+                    callback(err);
+                });
             });
-        });
+        }
     }, function(err) {
         if(err) console.log(err);
         callback(err);
     });
+}
+
+function mergeTileLayers(layerName, a, b, callback) {
+    var aData = JSON.parse(a.toGeoJSONSync(layerName));
+    var bData = JSON.parse(b.toGeoJSONSync(layerName));
+    var mergedData = {
+        type: 'FeatureCollection',
+        features: []
+    };
+    [aData, bData].forEach(function(fc){
+        for (var j = 0; j < fc.features.length; j++) {
+            mergedData.features.push(fc.features[j]);
+        }
+    });
+    var newTile = new mapnik.VectorTile(a.z, a.x, a.y);
+    newTile.tileSize = a.tileSize;
+    newTile.bufferSize = a.bufferSize;
+    newTile.addGeoJSON(JSON.stringify(mergedData), layerName);
+    callback(null, newTile);
 }
 
 function flipY(y, z) {
