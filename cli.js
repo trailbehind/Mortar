@@ -16,6 +16,7 @@ var geojsonMerge = require("@mapbox/geojson-merge");
 var mapnik = require("mapnik");
 var mbtiles = require("@mapbox/mbtiles");
 var ProgressBar = require("progress");
+var rbush = require("rbush");
 var Q = require("q");
 var zlib = require("zlib");
 
@@ -97,6 +98,10 @@ function merge(output, inputs, verbose, maxzoom) {
             input.getInfo(function(err, info) {
               if (err) return eachCallback(err);
               input.info = info;
+              input.minX = info.bounds[0];
+              input.minY = info.bounds[1];
+              input.maxX = info.bounds[2];
+              input.maxY = info.bounds[3];
               eachCallback(null);
             });
           },
@@ -130,7 +135,8 @@ function merge(output, inputs, verbose, maxzoom) {
       },
       function(callback) {
         console.log("merging inputs");
-        var unproccessedInputs = inputs.slice();
+        var inputsIndex = rbush();
+        inputsIndex.load(inputs);
         async.eachOfLimit(
           inputs,
           1,
@@ -138,14 +144,11 @@ function merge(output, inputs, verbose, maxzoom) {
             console.log("merge input " + (index + 1) + "/" + inputs.length);
             output.startWriting(function(err) {
               if (err) return eachCallback(err);
-              mergeInput(output, input, unproccessedInputs, verbose, maxzoom, function(
+              mergeInput(output, input, inputsIndex, verbose, maxzoom, function(
                 err
               ) {
                 if (err) return eachCallback(err);
-                var indexToRemove = unproccessedInputs.indexOf(input);
-                if(index != -1) {
-                  unproccessedInputs.splice(indexToRemove, 1);
-                }
+                inputsIndex.remove(input);
                 console.log(
                   "Merging " +
                     (index + 1) +
@@ -257,8 +260,9 @@ function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
     sql += " WHERE zoom_level <= ?";
     params.push(maxzoom);
   }
+  var overlappingInputs = inputs.search(input);
   input._db.all(sql, params, function(err, rows) {
-    console.log("Processing " + rows.length + " rows from input");
+    console.log("Processing " + rows.length + " rows from input, seaching " + overlappingInputs.length + " sources for tiles");
     var bar;
     if (!verbose) {
       bar = new ProgressBar(":elapseds :percent :bar :current/:total", {
@@ -285,7 +289,7 @@ function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
             eachCallback();
           } else {
             //tile does not yet exist in output, so merge it
-            mergeTile(output, inputs, x, y, z, verbose, function(err) {
+            mergeTile(output, overlappingInputs, x, y, z, verbose, function(err) {
               if (bar) {
                 bar.tick();
               }
