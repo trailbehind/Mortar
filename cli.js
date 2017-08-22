@@ -130,6 +130,7 @@ function merge(output, inputs, verbose, maxzoom) {
       },
       function(callback) {
         console.log("merging inputs");
+        var unproccessedInputs = inputs.slice();
         async.eachOfLimit(
           inputs,
           1,
@@ -137,10 +138,14 @@ function merge(output, inputs, verbose, maxzoom) {
             console.log("merge input " + (index + 1) + "/" + inputs.length);
             output.startWriting(function(err) {
               if (err) return eachCallback(err);
-              mergeInput(output, input, inputs, verbose, maxzoom, function(
+              mergeInput(output, input, unproccessedInputs, verbose, maxzoom, function(
                 err
               ) {
                 if (err) return eachCallback(err);
+                var indexToRemove = unproccessedInputs.indexOf(input);
+                if(index != -1) {
+                  unproccessedInputs.splice(indexToRemove, 1);
+                }
                 console.log(
                   "Merging " +
                     (index + 1) +
