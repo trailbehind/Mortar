@@ -203,7 +203,7 @@ function mergeInfo(a, b) {
   info.minzoom = Math.min(a.minzoom, b.minzoom);
   info.center = [
     (info.bounds[0] + info.bounds[2]) / 2,
-    info.bounds[1] + info.bounds[3],
+    (info.bounds[1] + info.bounds[3]) / 2,
     Math.round((info.maxzoom + info.minzoom) / 2)
   ];
   info.format = a.format;
