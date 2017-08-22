@@ -16,7 +16,7 @@ var geojsonMerge = require("@mapbox/geojson-merge");
 var mapnik = require("mapnik");
 var mbtiles = require("@mapbox/mbtiles");
 var ProgressBar = require("progress");
-var Q = require("Q");
+var Q = require("q");
 var zlib = require("zlib");
 
 mapnik.register_default_input_plugins();
