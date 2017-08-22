@@ -67,7 +67,7 @@ try {
 var inputTiles = [];
 
 console.log("opening inputs");
-async.each(
+async.eachSeries(
   inputs,
   function(path, callback) {
     new mbtiles(path, function(err, tiles) {
