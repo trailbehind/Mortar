@@ -9,13 +9,13 @@
     "test": "test"
   },
   "dependencies": {
+    "@mapbox/geojson-merge": "^1.0.2",
     "@mapbox/mbtiles": "^0.9.0",
     "async": "^2.3.0",
     "mapnik": "^3.6.0",
     "minimist": "^1.2.0",
-    "q": "^1.5.0",
     "progress": "^2.0.0",
-    "@mapbox/geojson-merge": "^1.0.2",
+    "q": "^1.5.0",
     "rbush": "^2.0.1"
   },
   "devDependencies": {},
@@ -27,10 +27,7 @@
     "url": "git+https://github.com/trailbehind/Mortar.git"
   },
   "keywords": [
-    "tilelive",
-    "cdn",
-    "varnish",
-    "purge"
+    "mbtiles"
   ],
   "_npmUser": {
     "name": "jessecrocker",
