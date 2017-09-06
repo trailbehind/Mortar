@@ -46,7 +46,7 @@ if (maxzoom === undefined) {
 }
 var inputs = argv._;
 
-if (!outputPath || !inputs || !inputs.length || inputs.length < 2) {
+if (!outputPath || !inputs || !inputs.length) {
   usage();
   process.exit(1);
 }
@@ -56,33 +56,64 @@ if (fs.existsSync(outputPath)) {
   process.exit(1);
 }
 
-try {
-  inputs.forEach(function(f) {
-    fs.statSync(f).isFile();
-  });
-} catch (e) {
-  return console.error(e);
-}
-
-var inputTiles = [];
-
-console.log("opening inputs");
+var inputMBTilesPath = [];
 async.eachSeries(
   inputs,
-  function(path, callback) {
-    new mbtiles(path, function(err, tiles) {
-      if (err) throw err;
-      inputTiles.push(tiles);
+  function(f, callback) {
+    var stats = fs.statSync(f);
+    if (stats.isFile()) {
+      inputMBTilesPath.append(f);
       callback();
-    });
+    } else if (stats.isDirectory()) {
+      console.log("Reading direcotry");
+      fs.readdir(f, function(err, items) {
+        for (var i = 0; i < items.length; i++) {
+          var itemPath = f + "/" + items[i];
+          if (!itemPath.toLowerCase().endsWith(".mbtiles")) {
+            continue;
+          }
+          var itemStats = fs.statSync(itemPath);
+          if (itemStats.isFile()) {
+            inputMBTilesPath.push(itemPath);
+          }
+        }
+        callback();
+      });
+    } else {
+      throw "Error, file is not a file or directory";
+    }
   },
   function(err) {
-    console.log("opening output");
     if (err) throw err;
-    new mbtiles(outputPath, function(err, tiles) {
-      if (err) throw err;
-      merge(tiles, inputTiles, verbose, maxzoom);
-    });
+    if (inputMBTilesPath.length < 2) {
+      usage();
+      process.exit(1);
+    }
+
+    var inputTiles = [];
+    console.log("opening " + inputMBTilesPath.length + " inputs");
+    async.eachSeries(
+      inputMBTilesPath,
+      function(path, callback) {
+        new mbtiles(path, function(err, tiles) {
+          if (err) {
+            console.log("Error opening input " + path);
+            throw err;
+          }
+          inputTiles.push(tiles);
+          callback();
+        });
+      },
+      function(err) {
+        if (err) throw err;
+        console.log("opening output");
+
+        new mbtiles(outputPath, function(err, tiles) {
+          if (err) throw err;
+          merge(tiles, inputTiles, verbose, maxzoom);
+        });
+      }
+    );
   }
 );
 
@@ -144,17 +175,11 @@ function merge(output, inputs, verbose, maxzoom) {
             console.log("merge input " + (index + 1) + "/" + inputs.length);
             output.startWriting(function(err) {
               if (err) return eachCallback(err);
-              mergeInput(output, input, inputsIndex, verbose, maxzoom, function(
-                err
-              ) {
+              mergeInput(output, input, inputsIndex, verbose, maxzoom, function(err) {
                 if (err) return eachCallback(err);
                 inputsIndex.remove(input);
                 console.log(
-                  "Merging " +
-                    (index + 1) +
-                    "/" +
-                    inputs.length +
-                    " finished, calling stopWriting"
+                  "Merging " + (index + 1) + "/" + inputs.length + " finished, calling stopWriting"
                 );
                 output.stopWriting(function(err) {
                   eachCallback(err);
@@ -253,8 +278,7 @@ function mergeLayerDefinition(a, b) {
 
 function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
   //Iterate tiles in input
-  var sql =
-    "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
+  var sql = "SELECT zoom_level AS z, tile_column AS x, tile_row AS y FROM tiles";
   var params = [];
   if (maxzoom !== undefined) {
     sql += " WHERE zoom_level <= ?";
@@ -262,7 +286,13 @@ function mergeInput(output, input, inputs, verbose, maxzoom, callback) {
   }
   var overlappingInputs = inputs.search(input);
   input._db.all(sql, params, function(err, rows) {
-    console.log("Processing " + rows.length + " rows from input, seaching " + overlappingInputs.length + " sources for tiles");
+    console.log(
+      "Processing " +
+        rows.length +
+        " rows from input, seaching " +
+        overlappingInputs.length +
+        " sources for tiles"
+    );
     var bar;
     if (!verbose) {
       bar = new ProgressBar(":elapseds :percent :bar :current/:total", {
@@ -353,16 +383,7 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
       } else {
         // > 1
         if (verbose) {
-          console.log(
-            "Merging " +
-              tilesWithData.length +
-              " tiles to " +
-              z +
-              "/" +
-              x +
-              "/" +
-              y
-          );
+          console.log("Merging " + tilesWithData.length + " tiles to " + z + "/" + x + "/" + y);
         }
         var layers = {};
         async.eachLimit(
@@ -375,15 +396,10 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
               function(layerName, layerCallback) {
                 if (layers[layerName]) {
                   try {
-                    mergeTileLayers(
-                      layerName,
-                      layers[layerName],
-                      tile,
-                      function(err, mergedLayer) {
-                        layers[layerName] = mergedLayer;
-                        layerCallback(err);
-                      }
-                    );
+                    mergeTileLayers(layerName, layers[layerName], tile, function(err, mergedLayer) {
+                      layers[layerName] = mergedLayer;
+                      layerCallback(err);
+                    });
                   } catch (err) {
                     layerCallback(err);
                   }
