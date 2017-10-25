@@ -397,6 +397,9 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
                 if (layers[layerName]) {
                   try {
                     mergeTileLayers(layerName, layers[layerName], tile, function(err, mergedLayer) {
+                      if (err) {
+                        return layerCallback(err);
+                      }
                       layers[layerName] = mergedLayer;
                       layerCallback(err);
                     });
@@ -440,14 +443,28 @@ function mergeTile(output, inputs, x, y, z, verbose, callback) {
 }
 
 function mergeTileLayers(layerName, a, b, callback) {
-  var aData = JSON.parse(a.toGeoJSONSync(layerName));
-  var bData = JSON.parse(b.toGeoJSONSync(layerName));
-  var mergedData = geojsonMerge.merge([aData, bData]);
-  var newTile = new mapnik.VectorTile(a.z, a.x, a.y);
-  newTile.tileSize = a.tileSize;
-  newTile.bufferSize = a.bufferSize;
-  newTile.addGeoJSON(JSON.stringify(mergedData), layerName);
-  callback(null, newTile);
+  try {
+    var datas = [];
+    try {
+      datas.push(JSON.parse(a.toGeoJSONSync(layerName)));
+    } catch (err) {
+      console.log("Error in mergeTileLayers" + err);
+    }
+    try {
+      datas.push(JSON.parse(b.toGeoJSONSync(layerName)));
+    } catch (err) {
+      console.log("Error in mergeTileLayers" + err);
+    }
+    var mergedData = geojsonMerge.merge(datas);
+    var newTile = new mapnik.VectorTile(a.z, a.x, a.y);
+    newTile.tileSize = a.tileSize;
+    newTile.bufferSize = a.bufferSize;
+    newTile.addGeoJSON(JSON.stringify(mergedData), layerName);
+    callback(null, newTile);
+  } catch (err) {
+    console.log("Error in mergeTileLayers", err);
+    callback(err, null);
+  }
 }
 
 function flipY(y, z) {
