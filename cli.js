@@ -62,7 +62,7 @@ async.eachSeries(
   function(f, callback) {
     var stats = fs.statSync(f);
     if (stats.isFile()) {
-      inputMBTilesPath.append(f);
+      inputMBTilesPath.push(f);
       callback();
     } else if (stats.isDirectory()) {
       console.log("Reading direcotry");
