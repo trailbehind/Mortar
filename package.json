@@ -1,6 +1,6 @@
 {
   "name": "tile-mortar",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Merge sets of tiles",
   "bin": {
     "mortar": "./cli.js"
