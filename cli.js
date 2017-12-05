@@ -60,28 +60,29 @@ var inputMBTilesPath = [];
 async.eachSeries(
   inputs,
   function(f, callback) {
-    var stats = fs.statSync(f);
-    if (stats.isFile()) {
-      inputMBTilesPath.push(f);
-      callback();
-    } else if (stats.isDirectory()) {
-      console.log("Reading direcotry");
-      fs.readdir(f, function(err, items) {
-        for (var i = 0; i < items.length; i++) {
-          var itemPath = f + "/" + items[i];
-          if (!itemPath.toLowerCase().endsWith(".mbtiles")) {
-            continue;
-          }
-          var itemStats = fs.statSync(itemPath);
-          if (itemStats.isFile()) {
-            inputMBTilesPath.push(itemPath);
-          }
-        }
+    fs.stat(f, function(err, stats){
+      if (stats.isFile()) {
+        inputMBTilesPath.push(f);
         callback();
-      });
-    } else {
-      throw "Error, file is not a file or directory";
-    }
+      } else if (stats.isDirectory()) {
+        console.log("Reading direcotry");
+        fs.readdir(f, function(err, items) {
+          for (var i = 0; i < items.length; i++) {
+            var itemPath = f + "/" + items[i];
+            if (!itemPath.toLowerCase().endsWith(".mbtiles")) {
+              continue;
+            }
+            var itemStats = fs.statSync(itemPath);
+            if (itemStats.isFile()) {
+              inputMBTilesPath.push(itemPath);
+            }
+          }
+          callback();
+        });
+      } else {
+        throw "Error, file is not a file or directory";
+      }
+    });
   },
   function(err) {
     if (err) throw err;
