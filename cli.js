@@ -61,7 +61,9 @@ async.eachSeries(
   inputs,
   function(f, callback) {
     fs.stat(f, function(err, stats){
-      if (stats.isFile()) {
+      if(err) {
+        throw(err);
+      } else if (stats.isFile()) {
         inputMBTilesPath.push(f);
         callback();
       } else if (stats.isDirectory()) {
