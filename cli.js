@@ -113,7 +113,9 @@ async.eachSeries(
 
         new mbtiles(outputPath, function(err, tiles) {
           if (err) throw err;
-          merge(tiles, inputTiles, verbose, maxzoom);
+          tiles._db.run('PRAGMA journal_mode=OFF', function(){
+            merge(tiles, inputTiles, verbose, maxzoom);
+          });
         });
       }
     );
